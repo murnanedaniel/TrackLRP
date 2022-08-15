@@ -3,10 +3,10 @@ project: LRP_Study_A
 model: InteractionGNN
 
 # Dataset parameters
-datatype_split: [100, 20, 10] # Number of [training, validation, testing] examples
+datatype_split: [300, 20, 10] # Number of [training, validation, testing] examples
 num_tracks: 20
 track_dis_width: 10
-num_layer: 10
+num_layer: 5
 min_r: 0.1
 max_r: 0.5
 detector_width: 0.5
@@ -19,7 +19,7 @@ edge_cut: 0.5
 spatial_channels: 2
 cell_channels: 0
 hidden: 128
-n_graph_iters: 5
+n_graph_iters: 4
 nb_node_layer: 3
 nb_edge_layer: 3
 emb_channels: 0
@@ -27,9 +27,9 @@ layernorm: True
 batchnorm: True
 aggregation: mean_max
 hidden_activation: SiLU
-weight: 2
+weight: 1
 warmup: 10
-lr: 0.002
+lr: 0.01
 factor: 0.7
 train_purity: 0
 patience: 20

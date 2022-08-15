@@ -89,66 +89,121 @@ def graph_intersection(
     
     return new_pred_graph, y
 
+def generate_single_track(i, min_r, max_r, num_layers, detector_width):
+
+    r = np.random.uniform(min_r, max_r)
+    theta = np.random.uniform(0, np.pi)
+    sign = np.random.choice([-1, 1])
+
+    x = np.linspace(0.05, detector_width + 0.05, num = num_layers)
+    y = sign*(np.sqrt(r**2 - (x - r*np.cos(theta))**2) - r*np.sin(theta))
+    pid = np.array(len(x)*[i+1], dtype = np.int64)
+    pt = 1000 * np.array(len(x)*[r])
+    
+    mask = (y == y)
+    x, y, pid, pt = x[mask], y[mask], pid[mask], pt[mask]
+
+    return np.vstack([x, y, pid, pt]).T
+
+def define_truth_graph(node_feature, ptcut):
+
+    connections = (node_feature[:-1, 2] == node_feature[1:,2])
+    print("Connections", connections.shape)
+
+    idxs = np.arange(len(node_feature))
+
+    truth_graph = np.vstack([idxs[:-1][connections], idxs[1:][connections]])
+    signal_truth_graph = truth_graph[:, (node_feature[:, 3][truth_graph] > ptcut).all(0)]
+
+    return truth_graph, signal_truth_graph
+
+def apply_geometric_cut(fully_connected_graph, node_feature, num_layers, min_r, max_r, detector_width):
+
+    del_x = (node_feature[fully_connected_graph[1], 0] - node_feature[fully_connected_graph[0], 0])
+    del_y = np.abs(node_feature[fully_connected_graph[1], 1] - node_feature[fully_connected_graph[0], 1])
+    sine = np.sin(np.abs(np.arctan(node_feature[fully_connected_graph[1], 1]/node_feature[fully_connected_graph[1], 0]) - 
+                        np.arctan(node_feature[fully_connected_graph[0], 1]/node_feature[fully_connected_graph[0], 0]))
+    )
+    # a = np.sqrt(del_x**2 + del_y**2)
+    
+    a = np.sqrt((node_feature[fully_connected_graph[1], 1] - node_feature[fully_connected_graph[0], 1])**2 + 
+               (node_feature[fully_connected_graph[1], 0] - node_feature[fully_connected_graph[0], 0])**2)
+
+    
+    R = a/sine/2
+    # fully_connected_graph = fully_connected_graph[:, (del_x <= 2*detector_width/num_layers) & (del_x > 0) & (R>min_r) & (R<max_r) & (del_y/R < 1/num_layers)]
+    trimmed_graph = fully_connected_graph[:, (del_x <= 2*detector_width/num_layers) & (del_x > 0) & (R>min_r) & (R<max_r) & (del_y/R < 1/num_layers)]
+
+    print(f"2: {trimmed_graph.shape}")
+
+    # R = R[(del_x <= 2*detector_width/num_layers) & (del_x > 0) & (R>min_r) & (R<max_r) & (del_y/R < 1/num_layers)]
+    R = R[node_feature[fully_connected_graph[0], 2] != node_feature[fully_connected_graph[1], 2]]
+    fully_connected_graph = fully_connected_graph[:, node_feature[fully_connected_graph[0], 2] != node_feature[fully_connected_graph[1], 2]]
+    
+    print(f"3: {fully_connected_graph.shape}")
+
+    return fully_connected_graph
+
+
+def construct_training_graph(node_feature, num_layers, min_r, max_r, detector_width):
+
+    idxs = np.arange(len(node_feature))
+    fully_connected_graph = np.vstack([np.resize(idxs, (len(idxs),len(idxs))).flatten(), np.resize(idxs, (len(idxs),len(idxs))).T.flatten()])
+    print(f"0: {fully_connected_graph.shape}")
+    fully_connected_graph = fully_connected_graph[:, np.random.choice(fully_connected_graph.shape[1], size = min(1000, len(node_feature))*len(node_feature), replace = False)]
+    print(f"1: {fully_connected_graph.shape}")
+
+    fully_connected_graph = apply_geometric_cut(fully_connected_graph, node_feature, num_layers, min_r, max_r, detector_width)   
+
+    return fully_connected_graph
+
+def sample_true_fake(fully_connected_graph, signal_true_graph, eff, pur):
+
+    truth_graph_samples = signal_true_graph[:, np.random.choice(signal_true_graph.shape[1], replace = False, size = int(eff*signal_true_graph.shape[1]))]
+    if int((1-pur)/pur*truth_graph_samples.shape[1]*eff) < fully_connected_graph.shape[1]:
+        fake_graph_samples = fully_connected_graph[:, np.random.choice(fully_connected_graph.shape[1], size = int((1-pur)/pur*truth_graph_samples.shape[1]*eff), replace = False)]
+    else:
+        fake_graph_samples = fully_connected_graph
+
+    graph = np.concatenate([truth_graph_samples, fake_graph_samples], axis = 1)
+
+    return graph
+
+def apply_nhits_min(event):
+
+    _, inverse, counts = event.pid.unique(return_inverse = True, return_counts = True)
+    event.nhits = counts[inverse]
+    event.pid[(event.nhits <= 3)] = 0
+    event.signal_true_edges = event.signal_true_edges[:, (event.nhits[event.signal_true_edges] > 3).all(0)]
+
+    return event
+
 @ignore_warning(RuntimeWarning)
 def generate_toy_event(num_tracks, track_dis_width, num_layers, min_r, max_r, detector_width, ptcut, eff, pur):
     # pT is defined as 1000r
     
     tracks = []
     num_tracks = random.randint(num_tracks-track_dis_width, num_tracks+track_dis_width)
+
+    # Generate all the tracks
     for i in range(num_tracks):
-        r = np.random.uniform(min_r, max_r)
-        theta = np.random.uniform(0, np.pi)
-        sign = np.random.choice([-1, 1])
-
-        x = np.linspace(0.05, detector_width + 0.05, num = num_layers)
-        y = sign*(np.sqrt(r**2 - (x - r*np.cos(theta))**2) - r*np.sin(theta))
-        pid = np.array(len(x)*[i+1], dtype = np.int64)
-        pt = 1000 * np.array(len(x)*[r])
-        
-        mask = (y == y)
-        x, y, pid, pt = x[mask], y[mask], pid[mask], pt[mask]
-        
-        tracks.append(np.vstack([x, y, pid, pt]).T)
+        track = generate_single_track(i, min_r, max_r, num_layers, detector_width)
+        tracks.append(track)
     
+    # Stack together track features
     node_feature = np.concatenate(tracks, axis = 0)
+    print("Features:", node_feature.shape)
     
-    connections = (node_feature[:-1, 2] == node_feature[1:,2])
-
-    idxs = np.arange(len(node_feature))
-
-    truth_graph = np.vstack([idxs[:-1][connections], idxs[1:][connections]])
-    signal_true_graph = truth_graph[:, (node_feature[:, 3][truth_graph] > ptcut).all(0)]
-    
-    fully_connected_graph = np.vstack([np.resize(idxs, (len(idxs),len(idxs))).flatten(), np.resize(idxs, (len(idxs),len(idxs))).T.flatten()])
-    fully_connected_graph = fully_connected_graph[:, np.random.choice(fully_connected_graph.shape[1], size = min(1000, len(node_feature))*len(node_feature), replace = False)]
-
-    # del_x = (node_feature[fully_connected_graph[1], 0] - node_feature[fully_connected_graph[0], 0])
-    # del_y = np.abs(node_feature[fully_connected_graph[1], 1] - node_feature[fully_connected_graph[0], 1])
-    # sine = np.sin(np.abs(np.arctan(node_feature[fully_connected_graph[1], 1]/node_feature[fully_connected_graph[1], 0]) - 
-    #                     np.arctan(node_feature[fully_connected_graph[0], 1]/node_feature[fully_connected_graph[0], 0]))
-    # )
-    # a = np.sqrt((node_feature[fully_connected_graph[1], 1] - node_feature[fully_connected_graph[0], 1])**2 + 
-    #            (node_feature[fully_connected_graph[1], 0] - node_feature[fully_connected_graph[0], 0])**2)
-    # R = a/sine/2
-    # fully_connected_graph = fully_connected_graph[:, (del_x <= 2*detector_width/num_layers) & (del_x > 0) & (R>min_r) & (R<max_r) & (del_y/R < 1/num_layers)]
-    # R = R[(del_x <= 2*detector_width/num_layers) & (del_x > 0) & (R>min_r) & (R<max_r) & (del_y/R < 1/num_layers)]
-    # R = R[node_feature[fully_connected_graph[0], 2] != node_feature[fully_connected_graph[1], 2]]
-    # fully_connected_graph = fully_connected_graph[:, node_feature[fully_connected_graph[0], 2] != node_feature[fully_connected_graph[1], 2]]
-
-    truth_graph_samples = signal_true_graph[:, np.random.choice(signal_true_graph.shape[1], replace = False, size = int(eff*signal_true_graph.shape[1]))]
-    # if int((1-pur)/pur*truth_graph_samples.shape[1]*eff) < fully_connected_graph.shape[1]:
-    #     fake_graph_samples = fully_connected_graph[:, np.random.choice(fully_connected_graph.shape[1], size = int((1-pur)/pur*truth_graph_samples.shape[1]*eff), replace = False)]
-    # else:
-    fake_graph_samples = fully_connected_graph
-
-    graph = np.concatenate([truth_graph_samples, fake_graph_samples], axis = 1)
+    # Define truth and training graphs
+    truth_graph, signal_true_graph = define_truth_graph(node_feature, ptcut) 
+    fully_connected_graph = construct_training_graph(node_feature, num_layers, min_r, max_r, detector_width)
+    graph = sample_true_fake(fully_connected_graph, signal_true_graph, eff, pur)   
     
     graph, y = graph_intersection(graph, signal_true_graph)
     node_feature = torch.from_numpy(node_feature).float()
     
     y_pid = (node_feature[:,2][graph[0]] == node_feature[:,2][graph[1]])
     pid_signal = (node_feature[:,2][graph[0]] == node_feature[:,2][graph[1]]) & (node_feature[:,3][graph]).all(0)
-    
     
     event = Data(x=node_feature[:,0:2],
                  edge_index= graph,
@@ -161,11 +216,8 @@ def generate_toy_event(num_tracks, track_dis_width, num_layers, min_r, max_r, de
                  y_pid = y_pid,
                  pid_signal = pid_signal,
                 )
-    _, inverse, counts = event.pid.unique(return_inverse = True, return_counts = True)
-    event.nhits = counts[inverse]
-    event.pid[(event.nhits <= 3)] = 0
-    
-    event.signal_true_edges = event.signal_true_edges[:, (event.nhits[event.signal_true_edges] > 3).all(0)]
+
+    event = apply_nhits_min(event)    
     
     return event
 
