@@ -166,7 +166,7 @@ class LRP_MLPF():
         Returns:
             R_tensor_new: a tensor/graph containing the computed Rscores of the previous layer
         """
-
+    
         torch.cuda.empty_cache()
 
         if msg_passing_layer:   # message_passing hack

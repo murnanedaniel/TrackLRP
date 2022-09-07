@@ -10,7 +10,7 @@ from torch.nn import Linear
 import torch
 import numpy as np
 
-from .generation_utils import load_dataset
+from .trigger_utils import build_dataset, load_dataset
 from sklearn.metrics import roc_auc_score
 
 
@@ -30,7 +30,7 @@ class GNNBase(LightningModule):
 
         if self.trainset is None:
             print("Setting up dataset")
-            self.trainset, self.valset, self.testset = load_dataset(**self.hparams)
+            self.trainset, self.valset, self.testset = build_dataset(**self.hparams)
 
         if (
             (self.trainer)
@@ -44,7 +44,7 @@ class GNNBase(LightningModule):
     def train_dataloader(self):
         if self.trainset is not None:
             return DataLoader(
-                self.trainset, batch_size=1, num_workers=4
+                self.trainset, batch_size=self.hparams["batch_size"], num_workers=4
             )  # , pin_memory=True, persistent_workers=True)
         else:
             return None
@@ -75,17 +75,30 @@ class GNNBase(LightningModule):
                 amsgrad=True,
             )
         ]
-        scheduler = [
-            {
-                "scheduler": torch.optim.lr_scheduler.StepLR(
-                    optimizer[0],
-                    step_size=self.hparams["patience"],
-                    gamma=self.hparams["factor"],
-                ),
-                "interval": "epoch",
-                "frequency": 1,
-            }
-        ]
+        if "scheduler" not in self.hparams or self.hparams["scheduler"] is None:
+            scheduler = [
+                {
+                    "scheduler": torch.optim.lr_scheduler.StepLR(
+                        optimizer[0],
+                        step_size=self.hparams["patience"],
+                        gamma=self.hparams["factor"],
+                    ),
+                    "interval": "epoch",
+                    "frequency": 1,
+                }
+            ]
+        elif self.hparams["scheduler"] == "cosine":
+            scheduler = [
+                {
+                    "scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
+                        optimizer[0],
+                        T_max=self.hparams["patience"],
+                        eta_min=self.hparams["factor"] * self.hparams["lr"],
+                    ),
+                    "interval": "epoch",
+                    "frequency": 1,
+                }
+            ]
         return optimizer, scheduler
 
     def get_input_data(self, batch):
@@ -129,7 +142,7 @@ class GNNBase(LightningModule):
         )
 
         input_data = self.get_input_data(batch)
-        output = self(input_data, edge_sample).squeeze()
+        output = self(input_data, edge_sample, batch.batch, batch.ptr).squeeze()
 
         positive_loss = F.binary_cross_entropy_with_logits(
             output[truth_sample], torch.ones(truth_sample.sum()).to(self.device)
@@ -195,7 +208,7 @@ class GNNBase(LightningModule):
         )
         
         input_data = self.get_input_data(batch)
-        output = self(input_data, edge_sample).squeeze()
+        output = self(input_data, edge_sample, batch.batch, batch.ptr).squeeze()
 
         positive_loss = F.binary_cross_entropy_with_logits(
             output[truth_sample], torch.ones(truth_sample.sum()).to(self.device)

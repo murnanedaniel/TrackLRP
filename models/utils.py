@@ -401,7 +401,7 @@ def make_mlp(
     input_size,
     sizes,
     hidden_activation="ReLU",
-    output_activation="ReLU",
+    output_activation=None,
     layer_norm=False,
     batch_norm=False,
 ):
@@ -423,7 +423,7 @@ def make_mlp(
     # Final layer
     layers.append(nn.Linear(sizes[-2], sizes[-1]))
     if output_activation is not None:
-        if layer_norm:
+        if layer_norm and sizes[-1] > 1:
             layers.append(nn.LayerNorm(sizes[-1], elementwise_affine=False))
         if batch_norm:
             layers.append(nn.BatchNorm1d(sizes[-1], track_running_stats=False, affine=False))
