@@ -23,6 +23,7 @@ class GravNet(GraphLevelClassifierBase):
             hidden_activation=hparams["hidden_activation"],
             output_activation=hparams["output_activation"],
             layer_norm=hparams["layernorm"],
+            batch_norm=hparams["batchnorm"],
         )
 
         # Construct the GravNet convolution modules 
@@ -36,7 +37,7 @@ class GravNet(GraphLevelClassifierBase):
             [hparams["hidden"]] * hparams["nb_node_layer"] + [1],
             hidden_activation=hparams["hidden_activation"],
             output_activation=None,
-            layer_norm=hparams["layernorm"],
+            layer_norm=hparams["layernorm"]
         )
 
     def output_step(self, x, batch):
@@ -81,7 +82,8 @@ class GravConv(nn.Module):
                 [hparams["hidden"]] * hparams["nb_node_layer"],
                 output_activation=hparams["hidden_activation"],
                 hidden_activation=hparams["hidden_activation"],
-                layer_norm=hparams["layernorm"]
+                layer_norm=hparams["layernorm"],
+                batch_norm=hparams["batchnorm"],
         )
 
         self.spatial_network = make_mlp(
@@ -89,6 +91,7 @@ class GravConv(nn.Module):
                 [hparams["hidden"]] * hparams["nb_node_layer"] + [hparams["emb_dims"]],
                 hidden_activation=hparams["hidden_activation"],
                 layer_norm=hparams["layernorm"],
+                batch_norm=hparams["batchnorm"],
         )
 
         if self.hparams["grav_level"] > 1:
@@ -98,6 +101,7 @@ class GravConv(nn.Module):
                 hidden_activation=hparams["hidden_activation"],
                 output_activation= "Sigmoid",
                 layer_norm=hparams["layernorm"],
+                batch_norm=hparams["batchnorm"],
             )
 
         if "learned_grav_weight" in hparams and hparams["learned_grav_weight"]:
@@ -107,6 +111,7 @@ class GravConv(nn.Module):
                 hidden_activation=hparams["hidden_activation"],
                 output_activation= hparams["grav_activation"],
                 layer_norm=hparams["layernorm"],
+                batch_norm=hparams["batchnorm"],
             )
 
         self.setup_configuration()
@@ -202,8 +207,10 @@ class GravConv(nn.Module):
                     return self.hparams["r"][0] + ( (self.hparams["r"][1] - self.hparams["r"][0]) * self.current_epoch / (self.hparams["max_epochs"]/2) )
                 else:
                     return self.hparams["r"][1] + ( (self.hparams["r"][2] - self.hparams["r"][1]) * (self.current_epoch - self.hparams["max_epochs"]/2) / (self.hparams["max_epochs"]/2) )
-        else:
+        elif isinstance(self.hparams["r"], float):
             return self.hparams["r"]
+        else:
+            return 0.3
 
     @property
     def knn(self):

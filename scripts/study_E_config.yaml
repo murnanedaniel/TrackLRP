@@ -20,8 +20,8 @@ hidden: 32
 n_graph_iters: 2
 nb_node_layer: 3
 nb_edge_layer: 3
-layernorm: True
-batchnorm: False
+layernorm: False
+batchnorm: True
 aggregation: mean_sum
 hidden_activation: SiLU
 output_activation: 
@@ -35,15 +35,15 @@ truth_key: y_trigger
 max_epochs: 200
 
 # GravNet-specific parameters
-knn: 0 # If knn_start_end not set, then the number of neighbors in each GravNet conv
+knn: 2 # If knn_start_end not set, then the number of neighbors in each GravNet conv
 rand_k: 0
 
-r: [0.2, 0.1, 0.1]
+r: 
 max_knn: 20
 
 emb_dims: 16
-grav_weight: [2, 1]
-grav_level: 0 # 
+grav_weight: 1.0
+grav_level: 1 # 
 norm: False
 
 learned_grav_weight: False
