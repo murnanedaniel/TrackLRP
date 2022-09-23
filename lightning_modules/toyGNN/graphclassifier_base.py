@@ -12,7 +12,7 @@ import numpy as np
 
 from .trigger_utils import build_dataset, load_dataset
 from sklearn.metrics import roc_auc_score
-from .gnn_base import GNNBase
+from .toy_gnn_base import GNNBase
 
 class GraphLevelClassifierBase(GNNBase):
     def __init__(self, hparams):

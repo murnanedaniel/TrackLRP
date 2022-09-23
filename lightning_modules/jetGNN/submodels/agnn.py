@@ -1,18 +1,12 @@
-import sys
-
 import torch.nn as nn
-from torch.nn import Linear
 import torch
-from torch_scatter import scatter_add, scatter_mean, scatter_max
-from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool
 from torch.utils.checkpoint import checkpoint
 
-from ..gnn_base import GNNBase, LargeGNNBase
-from ..graphclassifier_base import GraphLevelClassifierBase, AttentionDeficitBase
+from ..jet_gnn_base import JetGNNBase
 from ..utils import make_mlp
 
 
-class AGNN(GraphLevelClassifierBase):
+class AGNN(JetGNNBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         """

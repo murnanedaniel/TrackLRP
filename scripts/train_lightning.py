@@ -16,9 +16,13 @@ import warnings
 warnings.filterwarnings('ignore')
 
 sys.path.append("../")
-from models.submodels.interaction_gnn import InteractionGNN
-from models.submodels.agnn import AGNN, GraphLevelAGNN
-from models.submodels.gravnet import GravNet
+from lightning_modules.toyGNN.submodels.interaction_gnn import InteractionGNN
+from lightning_modules.toyGNN.submodels.agnn import AGNN, GraphLevelAGNN
+from lightning_modules.toyGNN.submodels.gravnet import GravNet
+
+from lightning_modules.jetGNN.submodels.interaction_gnn import InteractionGNN as InteractionGNN_jet
+from lightning_modules.jetGNN.submodels.agnn import AGNN as AGNN_jet
+from lightning_modules.jetGNN.submodels.gravnet import GravNet as GravNet_jet
 
 import wandb
 
@@ -80,7 +84,7 @@ def main():
     model = model_name(default_configs)
 
     checkpoint_callback = ModelCheckpoint(
-        monitor="sig_auc", mode="max", save_top_k=2, save_last=True
+        monitor="auc", mode="max", save_top_k=2, save_last=True
     )
     
     logger = WandbLogger(
